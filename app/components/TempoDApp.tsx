@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useReadContract } from 'wagmi'
 import { parseUnits, formatUnits, stringToHex, pad, type Address } from 'viem'
 import { Wallet, Send, RefreshCw, LogOut, Loader2, CheckCircle, AlertCircle, Info } from 'lucide-react'
 import { Hooks } from 'tempo.ts/wagmi'
@@ -39,33 +39,52 @@ type StablecoinKey = keyof typeof STABLECOINS
 
 const MEMO_PREFIX = 'INV123456'
 
+// ERC20 ABI for balanceOf
+const ERC20_ABI = [
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }]
+  }
+] as const
+
 export default function TempoDApp() {
   const { address, isConnected } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
 
-  // Use Tempo.ts Hooks - useTransferSync for transfer with fee token support
+  // Use Tempo.ts useTransferSync for transfer with fee token support
   const sendPayment = Hooks.token.useTransferSync()
 
-  // Get token balances using Tempo hooks
-  const alphaBalance = Hooks.token.useGetBalance({
-    token: STABLECOINS.AlphaUSD.address,
-    address: address,
+  // Get token balances using standard wagmi useReadContract
+  const { data: alphaBalance, refetch: refetchAlpha } = useReadContract({
+    address: STABLECOINS.AlphaUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
 
-  const betaBalance = Hooks.token.useGetBalance({
-    token: STABLECOINS.BetaUSD.address,
-    address: address,
+  const { data: betaBalance, refetch: refetchBeta } = useReadContract({
+    address: STABLECOINS.BetaUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
 
-  const thetaBalance = Hooks.token.useGetBalance({
-    token: STABLECOINS.ThetaUSD.address,
-    address: address,
+  const { data: thetaBalance, refetch: refetchTheta } = useReadContract({
+    address: STABLECOINS.ThetaUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
 
-  const pathBalance = Hooks.token.useGetBalance({
-    token: STABLECOINS.PathUSD.address,
-    address: address,
+  const { data: pathBalance, refetch: refetchPath } = useReadContract({
+    address: STABLECOINS.PathUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
 
   // State
@@ -75,11 +94,6 @@ export default function TempoDApp() {
   const [feeToken, setFeeToken] = useState<StablecoinKey>('BetaUSD')
   const [memo, setMemo] = useState('')
   const [txStatus, setTxStatus] = useState('')
-
-  // Native balance
-  const { data: nativeBalance, refetch: refetchNative } = useBalance({
-    address: address,
-  })
 
   // Handle connection
   const handleConnect = () => {
@@ -92,11 +106,10 @@ export default function TempoDApp() {
 
   // Refresh all balances
   const handleRefreshBalances = () => {
-    refetchNative()
-    alphaBalance.refetch()
-    betaBalance.refetch()
-    thetaBalance.refetch()
-    pathBalance.refetch()
+    refetchAlpha()
+    refetchBeta()
+    refetchTheta()
+    refetchPath()
     setTxStatus('🔄 Đã làm mới số dư!')
   }
 
@@ -128,12 +141,11 @@ export default function TempoDApp() {
       console.log('  - Memo:', memoBytes || 'No memo')
 
       // GỬI BẰNG TEMPO.TS HOOK VỚI FEE TOKEN SUPPORT
-      // Syntax from docs: https://docs.tempo.xyz/guide/payments/pay-fees-in-any-stablecoin
       sendPayment.mutate({
         amount: amountInSmallestUnit,
         to: recipient as Address,
         token: tokenConfig.address,
-        feeToken: feeTokenConfig.address, // ← ĐÂY LÀ TÍNH NĂNG HOẠT ĐỘNG THẬT!
+        feeToken: feeTokenConfig.address, // ← HOẠT ĐỘNG THẬT!
         ...(memoBytes && { memo: memoBytes })
       })
 
@@ -283,38 +295,31 @@ export default function TempoDApp() {
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
                   <div className="text-xs text-gray-600 mb-1">AlphaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(alphaBalance.data)}
+                    {formatBalance(alphaBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">AUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
                   <div className="text-xs text-gray-600 mb-1">BetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(betaBalance.data)}
+                    {formatBalance(betaBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">BUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border-2 border-purple-200">
                   <div className="text-xs text-gray-600 mb-1">ThetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(thetaBalance.data)}
+                    {formatBalance(thetaBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">TUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border-2 border-orange-200">
                   <div className="text-xs text-gray-600 mb-1">PathUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(pathBalance.data)}
+                    {formatBalance(pathBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">PUSD</div>
                 </div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-4 border-2 border-yellow-200">
-              <div className="text-sm text-gray-600 mb-1">Số dư Native (TEMO)</div>
-              <div className="text-2xl font-bold text-gray-800">
-                {nativeBalance ? formatUnits(nativeBalance.value, 18) : '0.0000'}
               </div>
             </div>
           </div>
@@ -473,11 +478,11 @@ export default function TempoDApp() {
               Version 3.0 - Production Ready
             </h3>
             <ul className="text-xs text-gray-600 space-y-1">
-              <li>✅ Sử dụng tempo.ts/wagmi v0.12 hooks (stable)</li>
+              <li>✅ Sử dụng tempo.ts/wagmi v0.12 (stable)</li>
               <li>✅ Fee token: Hoạt động thực sự với feeToken param</li>
               <li>✅ Memo: Gửi dưới dạng 32-byte hex trong transaction</li>
-              <li>✅ Hooks.token.useTransferSync() cho transfer với fee token</li>
-              <li>✅ Hooks.token.useGetBalance() cho balance checking</li>
+              <li>✅ Hooks.token.useTransferSync() cho transfer</li>
+              <li>✅ useReadContract() cho balance checking</li>
             </ul>
           </div>
         </div>
