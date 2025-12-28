@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Hooks } from 'tempo.ts/wagmi'
-import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useReadContract } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
 import { Wallet, Send, RefreshCw, LogOut, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 
@@ -37,6 +37,26 @@ const STABLECOINS = {
 
 type StablecoinKey = keyof typeof STABLECOINS
 
+const ERC20_ABI = [
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }]
+  },
+  {
+    name: 'transfer',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: 'success', type: 'bool' }]
+  }
+] as const
+
 const MEMO_PREFIX = 'INV123456'
 
 export default function TempoDApp() {
@@ -54,28 +74,34 @@ export default function TempoDApp() {
   // Tempo.ts Hooks - Token Transfer với Fee Token
   const sendPayment = Hooks.token.useTransferSync()
   
-  // Get token metadata
-  const alphaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.AlphaUSD.address })
-  const betaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.BetaUSD.address })
-  const thetaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.ThetaUSD.address })
-  const pathMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.PathUSD.address })
+  // KHÔNG DÙNG tempo.ts hooks nữa - có vấn đề với chain
+  // Dùng wagmi hooks thay thế
+  const { data: alphaBalance, refetch: refetchAlpha } = useReadContract({
+    address: STABLECOINS.AlphaUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+  })
 
-  // Get token balances - tempo.ts trả về bigint trực tiếp, không phải object
-  const alphaBalance = Hooks.token.useGetBalance({ 
-    account: address, 
-    token: STABLECOINS.AlphaUSD.address 
+  const { data: betaBalance, refetch: refetchBeta } = useReadContract({
+    address: STABLECOINS.BetaUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
-  const betaBalance = Hooks.token.useGetBalance({ 
-    account: address, 
-    token: STABLECOINS.BetaUSD.address 
+
+  const { data: thetaBalance, refetch: refetchTheta } = useReadContract({
+    address: STABLECOINS.ThetaUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
-  const thetaBalance = Hooks.token.useGetBalance({ 
-    account: address, 
-    token: STABLECOINS.ThetaUSD.address 
-  })
-  const pathBalance = Hooks.token.useGetBalance({ 
-    account: address, 
-    token: STABLECOINS.PathUSD.address 
+
+  const { data: pathBalance, refetch: refetchPath } = useReadContract({
+    address: STABLECOINS.PathUSD.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
 
   // Faucet hook
@@ -91,10 +117,10 @@ export default function TempoDApp() {
 
   // Handle refresh balances
   const handleRefreshBalances = () => {
-    alphaBalance.refetch()
-    betaBalance.refetch()
-    thetaBalance.refetch()
-    pathBalance.refetch()
+    refetchAlpha()
+    refetchBeta()
+    refetchTheta()
+    refetchPath()
   }
 
   // Handle add funds
@@ -263,28 +289,28 @@ export default function TempoDApp() {
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
                   <div className="text-xs text-gray-600 mb-1">AlphaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(alphaBalance.data as bigint)}
+                    {formatBalance(alphaBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">AUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
                   <div className="text-xs text-gray-600 mb-1">BetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(betaBalance.data as bigint)}
+                    {formatBalance(betaBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">BUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border-2 border-purple-200">
                   <div className="text-xs text-gray-600 mb-1">ThetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(thetaBalance.data as bigint)}
+                    {formatBalance(thetaBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">TUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border-2 border-orange-200">
                   <div className="text-xs text-gray-600 mb-1">PathUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(pathBalance.data as bigint)}
+                    {formatBalance(pathBalance as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">PUSD</div>
                 </div>
