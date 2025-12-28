@@ -1,16 +1,48 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useAccount, useConnect, useDisconnect, useBalance, useReadContract, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits, formatUnits, encodeFunctionData, type Address } from 'viem'
+import { useState } from 'react'
+import { Hooks } from 'tempo.ts/wagmi'
+import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { parseUnits, formatUnits } from 'viem'
 import { Wallet, Send, RefreshCw, LogOut, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
-import { STABLECOINS, MEMO_PREFIX, TEMPO_TESTNET, type StablecoinKey, ERC20_ABI } from '@/app/config/constants'
+
+// Constants
+const TEMPO_TESTNET = {
+  name: 'Tempo Testnet',
+  explorer: 'https://explore.tempo.xyz'
+}
+
+const STABLECOINS = {
+  AlphaUSD: {
+    address: '0x20c0000000000000000000000000000000000001' as `0x${string}`,
+    symbol: 'AUSD',
+    decimals: 6
+  },
+  BetaUSD: {
+    address: '0x20c0000000000000000000000000000000000002' as `0x${string}`,
+    symbol: 'BUSD',
+    decimals: 6
+  },
+  ThetaUSD: {
+    address: '0x20c0000000000000000000000000000000000003' as `0x${string}`,
+    symbol: 'TUSD',
+    decimals: 6
+  },
+  PathUSD: {
+    address: '0x20c0000000000000000000000000000000000000' as `0x${string}`,
+    symbol: 'PUSD',
+    decimals: 6
+  }
+}
+
+type StablecoinKey = keyof typeof STABLECOINS
+
+const MEMO_PREFIX = 'INV123456'
 
 export default function TempoDApp() {
   const { address, isConnected } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
-  const { sendTransaction, data: hash, error: writeError, isPending: isWriting } = useSendTransaction()
 
   // State
   const [recipient, setRecipient] = useState('')
@@ -18,76 +50,70 @@ export default function TempoDApp() {
   const [selectedToken, setSelectedToken] = useState<StablecoinKey>('AlphaUSD')
   const [feeToken, setFeeToken] = useState<StablecoinKey>('BetaUSD')
   const [memo, setMemo] = useState('')
-  const [txStatus, setTxStatus] = useState('')
 
-  // Native balance
-  const { data: nativeBalance, refetch: refetchNative } = useBalance({
-    address: address,
+  // Tempo.ts Hooks - Token Transfer với Fee Token
+  const sendPayment = Hooks.token.useTransferSync()
+  
+  // Get token metadata
+  const alphaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.AlphaUSD.address })
+  const betaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.BetaUSD.address })
+  const thetaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.ThetaUSD.address })
+  const pathMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.PathUSD.address })
+
+  // Get token balances
+  const alphaBalance = Hooks.token.useGetBalance({ 
+    account: address, 
+    token: STABLECOINS.AlphaUSD.address 
+  })
+  const betaBalance = Hooks.token.useGetBalance({ 
+    account: address, 
+    token: STABLECOINS.BetaUSD.address 
+  })
+  const thetaBalance = Hooks.token.useGetBalance({ 
+    account: address, 
+    token: STABLECOINS.ThetaUSD.address 
+  })
+  const pathBalance = Hooks.token.useGetBalance({ 
+    account: address, 
+    token: STABLECOINS.PathUSD.address 
   })
 
-  // Token balances
-  const { data: alphaBalance, refetch: refetchAlpha } = useReadContract({
-    address: STABLECOINS.AlphaUSD.address,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-  })
-
-  const { data: betaBalance, refetch: refetchBeta } = useReadContract({
-    address: STABLECOINS.BetaUSD.address,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-  })
-
-  const { data: thetaBalance, refetch: refetchTheta } = useReadContract({
-    address: STABLECOINS.ThetaUSD.address,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-  })
-
-  const { data: pathBalance, refetch: refetchPath } = useReadContract({
-    address: STABLECOINS.PathUSD.address,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-  })
-
-  // Wait for transaction
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash,
-  })
+  // Faucet hook
+  const { mutate: fundAccount, isPending: isFunding } = Hooks.faucet.useFundSync()
 
   // Handle connection
   const handleConnect = () => {
     const injectedConnector = connectors.find(c => c.id === 'injected')
     if (injectedConnector) {
       connect({ connector: injectedConnector })
-      setTxStatus('✅ Wallet connected!')
     }
   }
 
-  // Refresh all balances
+  // Handle refresh balances
   const handleRefreshBalances = () => {
-    refetchNative()
-    refetchAlpha()
-    refetchBeta()
-    refetchTheta()
-    refetchPath()
-    setTxStatus('🔄 Balances refreshed!')
+    alphaBalance.refetch()
+    betaBalance.refetch()
+    thetaBalance.refetch()
+    pathBalance.refetch()
   }
 
-  // Handle send payment with memo
+  // Handle add funds
+  const handleAddFunds = () => {
+    if (address) {
+      fundAccount({ account: address })
+    }
+  }
+
+  // Handle send payment with fee token
   const handleSendPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!address || !recipient || !amount) {
-      setTxStatus('⚠️ Please fill all required fields')
       return
     }
 
     const tokenConfig = STABLECOINS[selectedToken]
+    const feeTokenConfig = STABLECOINS[feeToken]
     const amountInSmallestUnit = parseUnits(amount, tokenConfig.decimals)
 
     // Build full memo
@@ -95,67 +121,22 @@ export default function TempoDApp() {
       ? `${MEMO_PREFIX} (${memo.trim()})` 
       : MEMO_PREFIX
 
-    setTxStatus(`⏳ Processing payment with memo: "${fullMemo}"...`)
+    console.log('📝 Gửi giao dịch:')
+    console.log('  - Token gửi:', selectedToken, tokenConfig.address)
+    console.log('  - Token trả phí:', feeToken, feeTokenConfig.address)
+    console.log('  - Số lượng:', amount)
+    console.log('  - Memo:', fullMemo)
 
-    try {
-      // Step 1: Encode ERC20 transfer function
-      const transferData = encodeFunctionData({
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [recipient as Address, amountInSmallestUnit],
-      })
-
-      // Step 2: Append memo as hex to transaction data
-      const memoBytes = new TextEncoder().encode(fullMemo)
-      const memoHex = Array.from(memoBytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')
-      
-      const dataWithMemo = (transferData + memoHex) as `0x${string}`
-
-      console.log('📝 Transaction data breakdown:')
-      console.log('  - Transfer function:', transferData)
-      console.log('  - Memo text:', fullMemo)
-      console.log('  - Memo hex:', memoHex)
-      console.log('  - Full data:', dataWithMemo)
-
-      // Step 3: Send transaction with memo appended
-      // Note: Fee token selection is UI-ready but requires Tempo's custom RPC integration
-      sendTransaction({
-        to: tokenConfig.address,
-        data: dataWithMemo,
-        value: BigInt(0),
-      })
-
-      setTxStatus(`💫 Transaction submitted! Memo: "${fullMemo}" | Fee token: ${feeToken}`)
-    } catch (error: any) {
-      console.error('Transaction error:', error)
-      setTxStatus(`❌ Error: ${error.message}`)
-    }
+    // QUAN TRỌNG: Dùng Hooks.token.useTransferSync với feeToken
+    sendPayment.mutate({ 
+      amount: amountInSmallestUnit, 
+      feeToken: feeTokenConfig.address, // ← FEE TOKEN Ở ĐÂY!
+      to: recipient as `0x${string}`, 
+      token: tokenConfig.address,
+      // Note: Tempo.ts chưa hỗ trợ memo trong useTransferSync
+      // Bạn có thể dùng useSendTransactionSync với custom data nếu cần memo
+    })
   }
-
-  // Handle transaction confirmation
-  useEffect(() => {
-    if (isConfirmed && hash) {
-      setTxStatus(`✅ Payment sent with memo! TX: ${hash.substring(0, 10)}...`)
-      
-      // Clear form
-      setRecipient('')
-      setAmount('')
-      setMemo('')
-
-      // Refresh balances
-      setTimeout(() => {
-        handleRefreshBalances()
-      }, 3000)
-    }
-  }, [isConfirmed, hash])
-
-  useEffect(() => {
-    if (writeError) {
-      setTxStatus(`❌ Transaction failed: ${writeError.message}`)
-    }
-  }, [writeError])
 
   // Format balance helper
   const formatBalance = (balance: bigint | undefined, decimals: number = 6) => {
@@ -172,14 +153,14 @@ export default function TempoDApp() {
             <div className="bg-gradient-to-r from-purple-600 to-cyan-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
               <Wallet className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Tempo Wallet v2</h1>
-            <p className="text-gray-600 mb-2">With Onchain Memo Support</p>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Tempo Wallet v3</h1>
+            <p className="text-gray-600 mb-2">Powered by tempo.ts</p>
             <div className="flex items-center justify-center gap-2 text-sm">
               <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">
                 {TEMPO_TESTNET.name}
               </span>
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium">
-                Memo Enabled
+                Fee Token ✓
               </span>
             </div>
           </div>
@@ -189,17 +170,19 @@ export default function TempoDApp() {
             className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
           >
             <Wallet className="w-5 h-5" />
-            Connect MetaMask
+            Kết nối MetaMask
           </button>
 
-          <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
-            <h3 className="font-semibold text-sm text-gray-800 mb-2">✨ Features:</h3>
-            <ul className="text-xs text-gray-600 space-y-1">
-              <li>• 📝 Onchain memo support (stored in tx data)</li>
-              <li>• 🎯 Pay fees in ANY stablecoin (UI Ready)</li>
-              <li>• ⚡ Pure Wagmi + Viem implementation</li>
-              <li>• 🔄 ERC20 token transfers</li>
-              <li>• 💪 Type-safe transactions</li>
+          <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-300">
+            <h3 className="font-semibold text-sm text-green-800 mb-2 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Đã tích hợp tempo.ts!
+            </h3>
+            <ul className="text-xs text-green-700 space-y-1">
+              <li>✅ Hook useTransferSync hỗ trợ feeToken</li>
+              <li>✅ Không cần config RPC thủ công</li>
+              <li>✅ Type-safe với TypeScript</li>
+              <li>✅ Tự động xử lý fee token</li>
             </ul>
           </div>
         </div>
@@ -219,10 +202,10 @@ export default function TempoDApp() {
               <span className="text-sm font-medium text-gray-700">{TEMPO_TESTNET.name}</span>
             </div>
             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-semibold">
-              Wagmi v2
+              tempo.ts
             </span>
             <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-semibold">
-              Memo ✓
+              Fee Token ✓
             </span>
           </div>
           <button
@@ -230,7 +213,7 @@ export default function TempoDApp() {
             className="flex items-center gap-2 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            Disconnect
+            Ngắt kết nối
           </button>
         </div>
 
@@ -238,61 +221,73 @@ export default function TempoDApp() {
           {/* Wallet Info */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <div className="mb-4">
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">Tempo Wallet v2</h1>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">Tempo Wallet v3</h1>
             </div>
             
             <div className="bg-gradient-to-r from-purple-100 to-cyan-100 rounded-xl p-4 mb-4">
-              <div className="text-sm text-gray-600 mb-1">Connected Address</div>
+              <div className="text-sm text-gray-600 mb-1">Địa chỉ ví</div>
               <div className="font-mono text-sm text-gray-800 break-all">{address}</div>
             </div>
             
             <div className="mb-4">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-semibold">Stablecoin Balances</h3>
-                <button
-                  onClick={handleRefreshBalances}
-                  className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-1 transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Refresh
-                </button>
+                <h3 className="text-lg font-semibold">Số dư Stablecoin</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddFunds}
+                    disabled={isFunding}
+                    className="text-sm bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    {isFunding ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Đang nạp...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4" />
+                        Nạp testnet
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleRefreshBalances}
+                    className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Làm mới
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
                   <div className="text-xs text-gray-600 mb-1">AlphaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(alphaBalance as bigint)}
+                    {formatBalance(alphaBalance.data?.value)}
                   </div>
                   <div className="text-xs text-gray-500">AUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
                   <div className="text-xs text-gray-600 mb-1">BetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(betaBalance as bigint)}
+                    {formatBalance(betaBalance.data?.value)}
                   </div>
                   <div className="text-xs text-gray-500">BUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border-2 border-purple-200">
                   <div className="text-xs text-gray-600 mb-1">ThetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(thetaBalance as bigint)}
+                    {formatBalance(thetaBalance.data?.value)}
                   </div>
                   <div className="text-xs text-gray-500">TUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border-2 border-orange-200">
                   <div className="text-xs text-gray-600 mb-1">PathUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(pathBalance as bigint)}
+                    {formatBalance(pathBalance.data?.value)}
                   </div>
                   <div className="text-xs text-gray-500">PUSD</div>
                 </div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-4 border-2 border-yellow-200">
-              <div className="text-sm text-gray-600 mb-1">Native Balance (TEMO)</div>
-              <div className="text-2xl font-bold text-gray-800">
-                {nativeBalance ? formatUnits(nativeBalance.value, 18) : '0.0000'}
               </div>
             </div>
           </div>
@@ -301,13 +296,13 @@ export default function TempoDApp() {
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Send className="w-5 h-5 text-purple-600" />
-              Send Payment with Memo
+              Gửi thanh toán
             </h2>
             
             <form onSubmit={handleSendPayment} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Token to Send
+                  Chọn Token để gửi
                 </label>
                 <select
                   value={selectedToken}
@@ -322,11 +317,11 @@ export default function TempoDApp() {
                 </select>
               </div>
 
-              {/* PAY FEES IN ANY STABLECOIN - UI FEATURE */}
+              {/* TRẢ PHÍ BẰNG TOKEN BẤT KỲ - HOẠT ĐỘNG VỚI TEMPO.TS */}
               <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4">
                 <label className="block text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
-                  🎯 Pay Fees With (Select Different Token!)
-                  <span className="px-2 py-0.5 bg-green-200 text-green-700 text-xs rounded-full font-semibold">FEATURE</span>
+                  🎯 Trả phí bằng
+                  <span className="px-2 py-0.5 bg-green-200 text-green-700 text-xs rounded-full font-semibold">tempo.ts</span>
                 </label>
                 <select
                   value={feeToken}
@@ -339,20 +334,21 @@ export default function TempoDApp() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-green-700 mt-2">
-                  ✅ UI ready for fee token selection. Integrate with Tempo's RPC for full support.
+                <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Fee token được truyền qua Hooks.token.useTransferSync!
                 </p>
-                {selectedToken === feeToken && (
-                  <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Try selecting a different fee token!
+                {selectedToken !== feeToken && (
+                  <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Tuyệt! Bạn đang gửi {selectedToken} và trả phí bằng {feeToken}
                   </p>
                 )}
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Recipient Address
+                  Địa chỉ người nhận
                 </label>
                 <input
                   type="text"
@@ -366,7 +362,7 @@ export default function TempoDApp() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount
+                  Số lượng
                 </label>
                 <input
                   type="number"
@@ -382,27 +378,25 @@ export default function TempoDApp() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  📝 Payment Memo (Stored Onchain)
+                  📝 Memo thanh toán (Tùy chọn)
                 </label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg">
                     <span className="font-mono text-sm text-gray-700 font-semibold">{MEMO_PREFIX}</span>
                     <span className="text-gray-400">|</span>
-                    <span className="text-xs text-gray-500">Invoice prefix (fixed)</span>
+                    <span className="text-xs text-gray-500">Mã hóa đơn</span>
                   </div>
                   <textarea
                     value={memo}
                     onChange={(e) => setMemo(e.target.value)}
-                    placeholder="Add custom note (optional)..."
+                    placeholder="Thêm ghi chú..."
                     rows={2}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                   />
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-xs text-blue-700">
-                      <span className="font-semibold">Memo Preview:</span> {memo && memo.trim() ? `${MEMO_PREFIX} (${memo.trim()})` : MEMO_PREFIX}
-                    </p>
-                    <p className="text-xs text-blue-600 mt-1">
-                      💡 This memo will be appended to transaction data and visible on block explorer
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-xs text-yellow-700">
+                      <AlertCircle className="w-3 h-3 inline mr-1" />
+                      Lưu ý: useTransferSync chưa hỗ trợ memo. Dùng useSendTransactionSync nếu cần memo.
                     </p>
                   </div>
                 </div>
@@ -410,43 +404,56 @@ export default function TempoDApp() {
               
               <button
                 type="submit"
-                disabled={isWriting || isConfirming || !recipient || !amount}
+                disabled={sendPayment.isPending || !recipient || !amount}
                 className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all flex items-center justify-center gap-2"
               >
-                {(isWriting || isConfirming) ? (
+                {sendPayment.isPending ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    {isWriting ? 'Signing...' : 'Confirming...'}
+                    Đang gửi...
                   </>
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    Send Payment with Memo
+                    Gửi thanh toán
                   </>
                 )}
               </button>
             </form>
             
-            {txStatus && (
-              <div className="mt-4 p-4 rounded-lg text-sm bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 text-blue-800">
-                {txStatus}
-              </div>
-            )}
-
-            {isConfirmed && hash && (
+            {sendPayment.isSuccess && sendPayment.data && (
               <div className="mt-4 p-4 rounded-lg bg-green-50 border border-green-200">
                 <div className="flex items-start gap-2">
                   <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-green-800 mb-1">Transaction Successful!</p>
+                    <p className="text-sm font-semibold text-green-800 mb-1">
+                      Giao dịch thành công!
+                    </p>
+                    <p className="text-xs text-green-700 mb-2">
+                      Đã gửi {amount} {selectedToken} và trả phí bằng {feeToken}
+                    </p>
                     <a 
-                      href={`${TEMPO_TESTNET.explorer}/tx/${hash}`}
+                      href={`${TEMPO_TESTNET.explorer}/tx/${sendPayment.data.receipt.transactionHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-blue-600 hover:text-blue-700 underline"
                     >
-                      View on Explorer (Check "Input Data" for memo) →
+                      Xem trên Explorer →
                     </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {sendPayment.isError && (
+              <div className="mt-4 p-4 rounded-lg bg-red-50 border border-red-200">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-800 mb-1">Lỗi giao dịch</p>
+                    <p className="text-xs text-red-700">
+                      {sendPayment.error?.message || 'Đã xảy ra lỗi'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -455,12 +462,13 @@ export default function TempoDApp() {
 
           {/* Info Box */}
           <div className="bg-white rounded-xl p-4 border border-gray-200">
-            <h3 className="font-semibold text-sm text-gray-800 mb-2">ℹ️ How Onchain Memo Works:</h3>
+            <h3 className="font-semibold text-sm text-gray-800 mb-2">✨ Tính năng tempo.ts:</h3>
             <ul className="text-xs text-gray-600 space-y-1">
-              <li>• Memo is encoded as UTF-8 and appended to transaction data</li>
-              <li>• Visible in block explorer under "Input Data" field</li>
-              <li>• Permanently stored on blockchain</li>
-              <li>• Can be decoded by anyone to read the message</li>
+              <li>✅ Hook <span className="font-mono bg-gray-100 px-1">useTransferSync</span> hỗ trợ tham số <span className="font-mono bg-gray-100 px-1">feeToken</span></li>
+              <li>✅ Tự động xử lý phí bằng token bạn chọn</li>
+              <li>✅ Không cần config RPC custom</li>
+              <li>✅ Type-safe với TypeScript</li>
+              <li>📚 Docs: <a href="https://docs.tempo.xyz" target="_blank" className="text-blue-600 underline">docs.tempo.xyz</a></li>
             </ul>
           </div>
         </div>

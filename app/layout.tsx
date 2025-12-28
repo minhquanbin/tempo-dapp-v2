@@ -6,8 +6,8 @@ import { Web3Provider } from './providers/Web3Provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Tempo Wallet v2 - Pay Fees in Any Stablecoin',
-  description: 'Send stablecoin payments and pay fees in any token on Tempo testnet',
+  title: 'Tempo DApp v3',
+  description: 'Tempo Wallet với Fee Token Support',
 }
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="vi">
       <body className={inter.className}>
         <Web3Provider>
           {children}
