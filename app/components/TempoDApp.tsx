@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useConnect, useDisconnect, useBalance, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useBalance, useReadContract, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, formatUnits, encodeFunctionData, type Address } from 'viem'
 import { Wallet, Send, RefreshCw, LogOut, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { STABLECOINS, MEMO_PREFIX, TEMPO_TESTNET, type StablecoinKey, ERC20_ABI } from '@/app/config/constants'
@@ -10,7 +10,7 @@ export default function TempoDApp() {
   const { address, isConnected } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
-  const { writeContract, data: hash, error: writeError, isPending: isWriting } = useWriteContract()
+  const { sendTransaction, data: hash, error: writeError, isPending: isWriting } = useSendTransaction()
 
   // State
   const [recipient, setRecipient] = useState('')
@@ -78,7 +78,7 @@ export default function TempoDApp() {
     setTxStatus('🔄 Balances refreshed!')
   }
 
-  // Handle send payment with custom fee token
+  // Handle send payment with memo
   const handleSendPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -90,22 +90,22 @@ export default function TempoDApp() {
     const tokenConfig = STABLECOINS[selectedToken]
     const amountInSmallestUnit = parseUnits(amount, tokenConfig.decimals)
 
-    // Build memo
+    // Build full memo
     const fullMemo = memo && memo.trim() 
       ? `${MEMO_PREFIX} (${memo.trim()})` 
       : MEMO_PREFIX
 
-    setTxStatus('⏳ Processing payment...')
+    setTxStatus(`⏳ Processing payment with memo: "${fullMemo}"...`)
 
     try {
-      // Encode transfer function with memo as additional data
+      // Step 1: Encode ERC20 transfer function
       const transferData = encodeFunctionData({
         abi: ERC20_ABI,
         functionName: 'transfer',
         args: [recipient as Address, amountInSmallestUnit],
       })
 
-      // Add memo to transaction data
+      // Step 2: Append memo as hex to transaction data
       const memoBytes = new TextEncoder().encode(fullMemo)
       const memoHex = Array.from(memoBytes)
         .map(b => b.toString(16).padStart(2, '0'))
@@ -113,22 +113,23 @@ export default function TempoDApp() {
       
       const dataWithMemo = (transferData + memoHex) as `0x${string}`
 
-      // TEMPO FEATURE: Pay fees with different token
-      // This is done via transaction metadata in Tempo
-      // For now, we use standard EVM transaction
-      // In production, you'd integrate with Tempo's fee payer service
+      console.log('📝 Transaction data breakdown:')
+      console.log('  - Transfer function:', transferData)
+      console.log('  - Memo text:', fullMemo)
+      console.log('  - Memo hex:', memoHex)
+      console.log('  - Full data:', dataWithMemo)
 
-      writeContract({
-        address: tokenConfig.address,
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [recipient as Address, amountInSmallestUnit],
-        // Note: Tempo's feeToken would be passed via custom RPC method
-        // For this demo, we show the UI for selecting fee token
+      // Step 3: Send transaction with memo appended
+      // Note: Fee token selection is UI-ready but requires Tempo's custom RPC integration
+      sendTransaction({
+        to: tokenConfig.address,
+        data: dataWithMemo,
+        value: BigInt(0),
       })
 
-      setTxStatus(`💫 Transaction submitted! Paying fees with ${feeToken}...`)
+      setTxStatus(`💫 Transaction submitted! Memo: "${fullMemo}" | Fee token: ${feeToken}`)
     } catch (error: any) {
+      console.error('Transaction error:', error)
       setTxStatus(`❌ Error: ${error.message}`)
     }
   }
@@ -136,7 +137,7 @@ export default function TempoDApp() {
   // Handle transaction confirmation
   useEffect(() => {
     if (isConfirmed && hash) {
-      setTxStatus(`✅ Payment sent! TX: ${hash.substring(0, 10)}...`)
+      setTxStatus(`✅ Payment sent with memo! TX: ${hash.substring(0, 10)}...`)
       
       // Clear form
       setRecipient('')
@@ -172,13 +173,13 @@ export default function TempoDApp() {
               <Wallet className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Tempo Wallet v2</h1>
-            <p className="text-gray-600 mb-2">Powered by Wagmi + Viem</p>
+            <p className="text-gray-600 mb-2">With Onchain Memo Support</p>
             <div className="flex items-center justify-center gap-2 text-sm">
               <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">
                 {TEMPO_TESTNET.name}
               </span>
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium">
-                Pure Wagmi
+                Memo Enabled
               </span>
             </div>
           </div>
@@ -194,10 +195,10 @@ export default function TempoDApp() {
           <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
             <h3 className="font-semibold text-sm text-gray-800 mb-2">✨ Features:</h3>
             <ul className="text-xs text-gray-600 space-y-1">
+              <li>• 📝 Onchain memo support (stored in tx data)</li>
               <li>• 🎯 Pay fees in ANY stablecoin (UI Ready)</li>
               <li>• ⚡ Pure Wagmi + Viem implementation</li>
               <li>• 🔄 ERC20 token transfers</li>
-              <li>• 🚀 Ready for Tempo integration</li>
               <li>• 💪 Type-safe transactions</li>
             </ul>
           </div>
@@ -219,6 +220,9 @@ export default function TempoDApp() {
             </div>
             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-semibold">
               Wagmi v2
+            </span>
+            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-semibold">
+              Memo ✓
             </span>
           </div>
           <button
@@ -297,7 +301,7 @@ export default function TempoDApp() {
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Send className="w-5 h-5 text-purple-600" />
-              Send Payment
+              Send Payment with Memo
             </h2>
             
             <form onSubmit={handleSendPayment} className="space-y-4">
@@ -336,12 +340,12 @@ export default function TempoDApp() {
                   ))}
                 </select>
                 <p className="text-xs text-green-700 mt-2">
-                  ✅ UI ready for fee token selection. To fully implement, integrate with Tempo's custom RPC methods.
+                  ✅ UI ready for fee token selection. Integrate with Tempo's RPC for full support.
                 </p>
                 {selectedToken === feeToken && (
                   <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" />
-                    Try selecting a different fee token to see the feature!
+                    Try selecting a different fee token!
                   </p>
                 )}
               </div>
@@ -378,7 +382,7 @@ export default function TempoDApp() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Memo
+                  📝 Payment Memo (Stored Onchain)
                 </label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg">
@@ -395,7 +399,10 @@ export default function TempoDApp() {
                   />
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <p className="text-xs text-blue-700">
-                      <span className="font-semibold">Preview:</span> {memo && memo.trim() ? `${MEMO_PREFIX} (${memo.trim()})` : MEMO_PREFIX}
+                      <span className="font-semibold">Memo Preview:</span> {memo && memo.trim() ? `${MEMO_PREFIX} (${memo.trim()})` : MEMO_PREFIX}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      💡 This memo will be appended to transaction data and visible on block explorer
                     </p>
                   </div>
                 </div>
@@ -414,7 +421,7 @@ export default function TempoDApp() {
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    Send Payment (Fee token: {feeToken})
+                    Send Payment with Memo
                   </>
                 )}
               </button>
@@ -430,7 +437,7 @@ export default function TempoDApp() {
               <div className="mt-4 p-4 rounded-lg bg-green-50 border border-green-200">
                 <div className="flex items-start gap-2">
                   <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-semibold text-green-800 mb-1">Transaction Successful!</p>
                     <a 
                       href={`${TEMPO_TESTNET.explorer}/tx/${hash}`}
@@ -438,12 +445,23 @@ export default function TempoDApp() {
                       rel="noopener noreferrer"
                       className="text-xs text-blue-600 hover:text-blue-700 underline"
                     >
-                      View on Explorer →
+                      View on Explorer (Check "Input Data" for memo) →
                     </a>
                   </div>
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Info Box */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200">
+            <h3 className="font-semibold text-sm text-gray-800 mb-2">ℹ️ How Onchain Memo Works:</h3>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li>• Memo is encoded as UTF-8 and appended to transaction data</li>
+              <li>• Visible in block explorer under "Input Data" field</li>
+              <li>• Permanently stored on blockchain</li>
+              <li>• Can be decoded by anyone to read the message</li>
+            </ul>
           </div>
         </div>
       </div>
