@@ -1,7 +1,29 @@
 import { http, createConfig } from 'wagmi'
+import { defineChain } from 'viem'
 import { injected } from 'wagmi/connectors'
-// Import chain từ tempo.ts thay vì tự define
-import { tempoTestnet } from 'tempo.ts/chains'
+
+// GIỮ NGUYÊN chain definition của bạn - tempo.ts KHÔNG export chains
+export const tempoTestnet = defineChain({
+  id: 41454,
+  name: 'Tempo Testnet',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'TEMO',
+    symbol: 'TEMO',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://rpc.testnet.tempo.xyz'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Tempo Explorer',
+      url: 'https://explore.tempo.xyz',
+    },
+  },
+  testnet: true,
+})
 
 export const config = createConfig({
   chains: [tempoTestnet],
