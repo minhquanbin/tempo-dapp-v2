@@ -44,7 +44,7 @@ export default function TempoDApp() {
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
 
-  // Use Tempo.ts Hooks instead of wagmi writeContract
+  // Use Tempo.ts Hooks - useTransferSync for transfer with fee token support
   const sendPayment = Hooks.token.useTransferSync()
 
   // Get token balances using Tempo hooks
@@ -111,7 +111,7 @@ export default function TempoDApp() {
     const feeTokenConfig = STABLECOINS[feeToken]
     const amountInSmallestUnit = parseUnits(amount, tokenConfig.decimals)
 
-    // Build memo if provided
+    // Build memo if provided (32-byte format)
     let memoBytes: `0x${string}` | undefined
     if (memo && memo.trim()) {
       const fullMemo = `${MEMO_PREFIX} (${memo.trim()})`
@@ -128,11 +128,12 @@ export default function TempoDApp() {
       console.log('  - Memo:', memoBytes || 'No memo')
 
       // GỬI BẰNG TEMPO.TS HOOK VỚI FEE TOKEN SUPPORT
+      // Syntax from docs: https://docs.tempo.xyz/guide/payments/pay-fees-in-any-stablecoin
       sendPayment.mutate({
         amount: amountInSmallestUnit,
         to: recipient as Address,
         token: tokenConfig.address,
-        feeToken: feeTokenConfig.address, // ← ĐÂY LÀ TÍNH NĂNG MỚI!
+        feeToken: feeTokenConfig.address, // ← ĐÂY LÀ TÍNH NĂNG HOẠT ĐỘNG THẬT!
         ...(memoBytes && { memo: memoBytes })
       })
 
@@ -186,12 +187,12 @@ export default function TempoDApp() {
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Tempo Wallet v3.0</h1>
             <p className="text-gray-600 mb-2">Real Fee Token Support</p>
-            <div className="flex items-center justify-center gap-2 text-sm">
+            <div className="flex items-center justify-center gap-2 text-sm flex-wrap">
               <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">
                 {TEMPO_TESTNET.name}
               </span>
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium">
-                tempo.ts/wagmi
+                tempo.ts v0.12
               </span>
             </div>
           </div>
@@ -233,14 +234,14 @@ export default function TempoDApp() {
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-cyan-500 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Network Status Banner */}
-        <div className="mb-4 bg-white rounded-xl p-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="mb-4 bg-white rounded-xl p-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm font-medium text-gray-700">{TEMPO_TESTNET.name}</span>
             </div>
             <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-semibold">
-              tempo.ts v3.0
+              tempo.ts v0.12
             </span>
             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-semibold">
               Fee Token ✓
@@ -472,7 +473,7 @@ export default function TempoDApp() {
               Version 3.0 - Production Ready
             </h3>
             <ul className="text-xs text-gray-600 space-y-1">
-              <li>✅ Sử dụng tempo.ts/wagmi hooks (stable)</li>
+              <li>✅ Sử dụng tempo.ts/wagmi v0.12 hooks (stable)</li>
               <li>✅ Fee token: Hoạt động thực sự với feeToken param</li>
               <li>✅ Memo: Gửi dưới dạng 32-byte hex trong transaction</li>
               <li>✅ Hooks.token.useTransferSync() cho transfer với fee token</li>

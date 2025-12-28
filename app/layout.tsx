@@ -1,27 +1,27 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Web3Provider } from './providers/Web3Provider'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { Web3Provider } from "./providers/Web3Provider";
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Tempo DApp v3',
-  description: 'Tempo Wallet với Fee Token Support',
-}
+  title: "Tempo Wallet v3.0",
+  description: "Pay fees in any stablecoin on Tempo Testnet",
+};
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="vi">
+    <html lang="en">
       <body className={inter.className}>
         <Web3Provider>
           {children}
         </Web3Provider>
       </body>
     </html>
-  )
+  );
 }
