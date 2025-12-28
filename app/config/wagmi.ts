@@ -1,4 +1,5 @@
-import { http, createConfig, defineChain } from 'wagmi'
+import { http, createConfig } from 'wagmi'
+import { defineChain } from 'viem'
 import { injected } from 'wagmi/connectors'
 
 // Define Tempo Testnet chain
@@ -12,9 +13,6 @@ export const tempoTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.testnet.tempo.xyz'],
-    },
-    public: {
       http: ['https://rpc.testnet.tempo.xyz'],
     },
   },
