@@ -60,7 +60,7 @@ export default function TempoDApp() {
   const thetaMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.ThetaUSD.address })
   const pathMetadata = Hooks.token.useGetMetadata({ token: STABLECOINS.PathUSD.address })
 
-  // Get token balances
+  // Get token balances - tempo.ts trả về bigint trực tiếp, không phải object
   const alphaBalance = Hooks.token.useGetBalance({ 
     account: address, 
     token: STABLECOINS.AlphaUSD.address 
@@ -263,28 +263,28 @@ export default function TempoDApp() {
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
                   <div className="text-xs text-gray-600 mb-1">AlphaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(alphaBalance.data?.value)}
+                    {formatBalance(alphaBalance.data as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">AUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
                   <div className="text-xs text-gray-600 mb-1">BetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(betaBalance.data?.value)}
+                    {formatBalance(betaBalance.data as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">BUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border-2 border-purple-200">
                   <div className="text-xs text-gray-600 mb-1">ThetaUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(thetaBalance.data?.value)}
+                    {formatBalance(thetaBalance.data as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">TUSD</div>
                 </div>
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border-2 border-orange-200">
                   <div className="text-xs text-gray-600 mb-1">PathUSD</div>
                   <div className="text-xl font-bold text-gray-800">
-                    {formatBalance(pathBalance.data?.value)}
+                    {formatBalance(pathBalance.data as bigint)}
                   </div>
                   <div className="text-xs text-gray-500">PUSD</div>
                 </div>
